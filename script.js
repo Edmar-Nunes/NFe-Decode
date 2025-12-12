@@ -237,42 +237,36 @@ function extrairLoteValidadeFabricacao(detElement) {
     
     if (!infAdProdElement || !infAdProdElement.textContent) {
         return {
-            lote: "N/A",
-            validade: "N/A",
-            fabricacao: "N/A",
+            lotes: [],
+            validades: [],
+            fabricacoes: [],
             textoOriginal: ""
         };
     }
     
     const texto = infAdProdElement.textContent.trim();
     
-    // Extrai todas as ocorrências de VALIDADE e LOTE
-    const lotes = extrairTodasOcorrencias(texto, "LOTE:");
-    const validades = extrairTodasOcorrencias(texto, "VALIDADE:");
-    const fabricacoes = extrairTodasOcorrencias(texto, "FABRICAÇÃO:");
+    // Extrai TODAS as ocorrências (para múltiplos lotes/validades)
+    const lotes = extrairTodosPadroes(texto, /LOTE:\s*([^\s-]+)/gi);
+    const validades = extrairTodosPadroes(texto, /VALIDADE:\s*([^\s-]+)/gi);
+    const fabricacoes = extrairTodosPadroes(texto, /FABRICAÇÃO:\s*([^\s-]+)/gi);
     
     return {
-        lote: lotes.length > 0 ? lotes.join(', ') : "N/A",
-        validade: validades.length > 0 ? validades.join(', ') : "N/A",
-        fabricacao: fabricacoes.length > 0 ? fabricacoes.join(', ') : "N/A",
+        lotes: lotes,
+        validades: validades,
+        fabricacoes: fabricacoes,
         textoOriginal: texto
     };
 }
 
 /**
- * Extrai todas as ocorrências de um prefixo no texto
+ * Extrai todos os padrões do texto (incluindo múltiplos)
  */
-function extrairTodasOcorrencias(texto, prefixo) {
+function extrairTodosPadroes(texto, regex) {
     const resultados = [];
-    const regex = new RegExp(`${prefixo}\\s*([^\\s\\-]+)`, 'gi');
-    
     let match;
+    
     while ((match = regex.exec(texto)) !== null) {
-        // Para evitar loops infinitos
-        if (match.index === regex.lastIndex) {
-            regex.lastIndex++;
-        }
-        
         if (match[1]) {
             resultados.push(match[1].trim());
         }
@@ -282,85 +276,114 @@ function extrairTodasOcorrencias(texto, prefixo) {
 }
 
 /**
- * Formata a exibição das informações de lote para a tabela
+ * Formata a exibição das informações de lote para a tabela HTML
  */
 function formatarLoteDisplay(loteInfo) {
     if (loteInfo.textoOriginal) {
-        // Formata o texto original com quebras de linha
         return loteInfo.textoOriginal
-            .replace(/\s+-\s+/g, '\n')  // Substitui " - " por quebra de linha
+            .replace(/\s+-\s+/g, '\n')
             .replace(/VALIDADE:/g, '\nVALIDADE:')
             .replace(/LOTE:/g, '\nLOTE:')
             .replace(/FABRICAÇÃO:/g, '\nFABRICAÇÃO:')
             .trim()
-            .replace(/^\n+/, ''); // Remove linha vazia no início
+            .replace(/^\n+/, '');
     }
     
     let display = '';
-    if (loteInfo.lote !== "N/A") display += `LOTE: ${loteInfo.lote}\n`;
-    if (loteInfo.validade !== "N/A") display += `VALIDADE: ${loteInfo.validade}\n`;
-    if (loteInfo.fabricacao !== "N/A") display += `FABRICAÇÃO: ${loteInfo.fabricacao}`;
+    
+    // Exibe todas as validades
+    if (loteInfo.validades.length > 0) {
+        loteInfo.validades.forEach((val, i) => {
+            display += `VALIDADE: ${val}\n`;
+        });
+    }
+    
+    // Exibe todos os lotes
+    if (loteInfo.lotes.length > 0) {
+        loteInfo.lotes.forEach((lote, i) => {
+            display += `LOTE: ${lote}\n`;
+        });
+    }
+    
+    // Exibe todas as fabricações
+    if (loteInfo.fabricacoes.length > 0) {
+        loteInfo.fabricacoes.forEach((fab, i) => {
+            display += `FABRICAÇÃO: ${fab}\n`;
+        });
+    }
     
     return display.trim() || 'N/A';
 }
 
 /**
- * Formata as informações de lote para exportação (sem quebras de linha)
+ * Formata lote/validade para Excel (inclui todos os múltiplos)
  */
-function formatarLoteParaExportacao(loteInfo) {
-    if (loteInfo.textoOriginal) {
-        // Para exportação, mantém o texto original mas substitui quebras
-        return loteInfo.textoOriginal
-            .replace(/\n/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim();
+function formatarLoteParaExcel(loteInfo) {
+    let resultado = [];
+    
+    // Para Excel, formata cada par validade-lote
+    const maxItems = Math.max(loteInfo.validades.length, loteInfo.lotes.length);
+    
+    for (let i = 0; i < maxItems; i++) {
+        let item = '';
+        if (loteInfo.validades[i]) {
+            item += `V:${loteInfo.validades[i]}`;
+        }
+        if (loteInfo.lotes[i]) {
+            if (item) item += ' ';
+            item += `L:${loteInfo.lotes[i]}`;
+        }
+        if (item) {
+            resultado.push(item);
+        }
     }
     
-    let exportacao = '';
-    if (loteInfo.lote !== "N/A") exportacao += `LOTE: ${loteInfo.lote} | `;
-    if (loteInfo.validade !== "N/A") exportacao += `VALIDADE: ${loteInfo.validade} | `;
-    if (loteInfo.fabricacao !== "N/A") exportacao += `FABRICAÇÃO: ${loteInfo.fabricacao} | `;
+    if (resultado.length > 0) {
+        return resultado.join(' | ');
+    }
     
-    exportacao = exportacao.replace(/\s\|\s$/, '');
+    // Fallback para texto original
+    if (loteInfo.textoOriginal) {
+        return loteInfo.textoOriginal.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+    }
     
-    return exportacao || 'N/A';
+    return 'N/A';
 }
 
 /**
- * Formata lote/validade para PDF (mais compacto)
+ * Formata lote/validade para PDF (compacto, mas mostra múltiplos)
  */
 function formatarLoteParaPDF(loteInfo) {
-    if (loteInfo.textoOriginal) {
-        // Formato compacto: "V:02/2028 L:MAS202501-02/28"
-        let resultado = '';
-        
-        if (loteInfo.validade !== "N/A") {
-            // Pega apenas a primeira validade
-            const primeiraValidade = loteInfo.validade.split(',')[0];
-            resultado += `V:${primeiraValidade.trim()} `;
+    let resultado = [];
+    
+    // Para PDF, mostra até 2 pares validade-lote
+    const maxItems = Math.min(Math.max(loteInfo.validades.length, loteInfo.lotes.length), 2);
+    
+    for (let i = 0; i < maxItems; i++) {
+        let item = '';
+        if (loteInfo.validades[i]) {
+            item += `V${i+1}:${loteInfo.validades[i]}`;
         }
-        
-        if (loteInfo.lote !== "N/A") {
-            // Pega apenas o primeiro lote
-            const primeiroLote = loteInfo.lote.split(',')[0];
-            resultado += `L:${primeiroLote.trim()}`;
+        if (loteInfo.lotes[i]) {
+            if (item) item += ' ';
+            item += `L${i+1}:${loteInfo.lotes[i]}`;
         }
-        
-        return resultado.trim();
+        if (item) {
+            resultado.push(item);
+        }
     }
     
-    // Fallback
-    let resultado = '';
-    if (loteInfo.validade !== "N/A") {
-        const primeiraValidade = loteInfo.validade.split(',')[0];
-        resultado += `V:${primeiraValidade.trim()} `;
-    }
-    if (loteInfo.lote !== "N/A") {
-        const primeiroLote = loteInfo.lote.split(',')[0];
-        resultado += `L:${primeiroLote.trim()}`;
+    if (resultado.length > 0) {
+        return resultado.join('; ');
     }
     
-    return resultado.trim() || 'N/A';
+    // Se houver mais itens, indica com "..."
+    if (loteInfo.validades.length > 2 || loteInfo.lotes.length > 2) {
+        const count = Math.max(loteInfo.validades.length, loteInfo.lotes.length);
+        return `V1:${loteInfo.validades[0]} L1:${loteInfo.lotes[0]}... (+${count-1})`;
+    }
+    
+    return 'N/A';
 }
 
 // ============================================
@@ -416,71 +439,59 @@ function exportToExcel() {
         
         XLSX.utils.book_append_sheet(wb, infoSheet, "Informações NF-e");
         
-        // Planilha de produtos
+        // Planilha de produtos com TODAS as informações
         const produtosSheetData = [
-            ["PRODUTOS/SERVIÇOS", "", "", "", "", "", "", "", ""],
-            ["", "", "", "", "", "", "", "", ""],
-            ["Código", "Descrição", "Lote/Validade/Fabricação", "EAN", "NCM", "Quantidade", "Unidade", "Valor Unitário", "Valor Total"]
+            ["PRODUTOS/SERVIÇOS", "", "", "", "", "", "", "", "", ""],
+            ["", "", "", "", "", "", "", "", "", ""],
+            ["Item", "Código", "Descrição", "Validade(s)", "Lote(s)", "Qtd", "Unidade", "Valor Unitário", "Valor Total", "Informações Completas"]
         ];
         
-        produtosExibidos.forEach(prod => {
-            // Formata as informações de lote para exportação
-            const loteExport = formatarLoteParaExportacao(prod.loteInfo);
+        produtosExibidos.forEach((prod, index) => {
+            // Formata separadamente validades e lotes
+            const validadesStr = prod.loteInfo.validades.length > 0 ? 
+                prod.loteInfo.validades.join(', ') : 'N/A';
+            const lotesStr = prod.loteInfo.lotes.length > 0 ? 
+                prod.loteInfo.lotes.join(', ') : 'N/A';
             
             produtosSheetData.push([
+                (index + 1).toString(),
                 prod.codigo,
                 prod.descricao,
-                loteExport,
-                prod.ean,
-                prod.ncm,
+                validadesStr,
+                lotesStr,
                 formatNumber(prod.quantidade),
                 prod.unidade,
                 `R$ ${formatCurrency(prod.valorUnitario)}`,
-                `R$ ${formatCurrency(prod.valorTotal)}`
+                `R$ ${formatCurrency(prod.valorTotal)}`,
+                prod.loteInfo.textoOriginal || 'N/A'
             ]);
         });
         
         // Adiciona totais
         const totalProdutos = produtosExibidos.reduce((sum, prod) => sum + parseFloat(prod.valorTotal || 0), 0);
         produtosSheetData.push(
-            ["", "", "", "", "", "", "", "", ""],
-            ["", "", "", "", "", "", "", "TOTAL:", `R$ ${formatCurrency(totalProdutos.toString())}`]
+            ["", "", "", "", "", "", "", "", "", ""],
+            ["", "", "", "", "", "", "", "TOTAL:", `R$ ${formatCurrency(totalProdutos.toString())}`, ""]
         );
         
         const produtosSheet = XLSX.utils.aoa_to_sheet(produtosSheetData);
         
         // Estilização produtos
         const prodColWidths = [
-            {wch: 15}, {wch: 40}, {wch: 50}, {wch: 15}, {wch: 10}, {wch: 10}, {wch: 8}, {wch: 15}, {wch: 15}
+            {wch: 8},  // Item
+            {wch: 15}, // Código
+            {wch: 35}, // Descrição
+            {wch: 20}, // Validade(s)
+            {wch: 25}, // Lote(s)
+            {wch: 10}, // Qtd
+            {wch: 10}, // Unidade
+            {wch: 15}, // Valor Unitário
+            {wch: 15}, // Valor Total
+            {wch: 40}  // Informações Completas
         ];
         produtosSheet['!cols'] = prodColWidths;
         
         XLSX.utils.book_append_sheet(wb, produtosSheet, "Produtos");
-        
-        // Planilha detalhada de lotes (OPCIONAL)
-        const lotesSheetData = [
-            ["DETALHES DE LOTE E VALIDADE", "", "", "", ""],
-            ["", "", "", "", ""],
-            ["Item", "Descrição", "Lote", "Validade", "Texto Original"]
-        ];
-        
-        produtosExibidos.forEach((prod, index) => {
-            lotesSheetData.push([
-                index + 1,
-                prod.descricao,
-                prod.loteInfo.lote !== "N/A" ? prod.loteInfo.lote : "N/A",
-                prod.loteInfo.validade !== "N/A" ? prod.loteInfo.validade : "N/A",
-                prod.loteInfo.textoOriginal || "N/A"
-            ]);
-        });
-        
-        const lotesSheet = XLSX.utils.aoa_to_sheet(lotesSheetData);
-        const lotesColWidths = [
-            {wch: 8}, {wch: 40}, {wch: 30}, {wch: 15}, {wch: 50}
-        ];
-        lotesSheet['!cols'] = lotesColWidths;
-        
-        XLSX.utils.book_append_sheet(wb, lotesSheet, "Detalhes Lotes");
         
         // Gera o arquivo Excel
         const fileName = `NF-e_${nfeData.nfeInfo.numero || 'export'}_${new Date().toISOString().slice(0,10)}.xlsx`;
@@ -500,128 +511,105 @@ function exportToPDF() {
     
     try {
         const { jsPDF } = window.jspdf;
-        const doc = new jsPDF('l', 'mm', 'a4'); // 'l' para landscape (paisagem)
+        const doc = new jsPDF('l', 'mm', 'a4'); // Landscape
         
-        // Configurações
+        // Configurações da página
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
-        const margin = 10;
+        const margin = 15;
         let yPos = margin;
         
         // Cabeçalho
-        doc.setFontSize(14);
+        doc.setFontSize(16);
         doc.setTextColor(41, 128, 185);
+        doc.setFont(undefined, 'bold');
         doc.text("RELATÓRIO DE NOTA FISCAL ELETRÔNICA", pageWidth / 2, yPos, { align: 'center' });
-        yPos += 7;
+        yPos += 8;
         
-        doc.setFontSize(9);
-        doc.setTextColor(100, 100, 100);
-        doc.text(`Data de exportação: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`, pageWidth / 2, yPos, { align: 'center' });
-        yPos += 12;
-        
-        // Informações básicas (mais compactas)
         doc.setFontSize(10);
+        doc.setTextColor(100, 100, 100);
+        doc.setFont(undefined, 'normal');
+        doc.text(`Data de exportação: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`, pageWidth / 2, yPos, { align: 'center' });
+        yPos += 15;
+        
+        // Linha de informações principais
+        doc.setFontSize(11);
         doc.setTextColor(44, 62, 80);
         doc.setFont(undefined, 'bold');
-        doc.text("INFORMAÇÕES DA NF-e", margin, yPos);
-        yPos += 6;
+        doc.text("NF-e", margin, yPos);
         
-        doc.setFontSize(8);
-        doc.setFont(undefined, 'normal');
-        doc.text(`Número: ${nfeData.nfeInfo.numero || 'N/A'}`, margin, yPos);
-        doc.text(`Série: ${nfeData.nfeInfo.serie || 'N/A'}`, margin + 60, yPos);
-        doc.text(`Data: ${formatDate(nfeData.nfeInfo.dataEmissao)}`, margin + 120, yPos);
-        doc.text(`Valor: R$ ${formatCurrency(nfeData.nfeInfo.valorTotal)}`, margin + 180, yPos);
-        yPos += 5;
-        doc.text(`Chave: ${nfeData.nfeInfo.chaveAcesso ? nfeData.nfeInfo.chaveAcesso.substring(0, 50) + '...' : 'N/A'}`, margin, yPos);
-        yPos += 10;
-        
-        // Emitente e Destinatário lado a lado
-        const colWidth = (pageWidth - 3 * margin) / 2;
-        
-        // Emitente
-        doc.setFontSize(9);
-        doc.setFont(undefined, 'bold');
-        doc.text("EMITENTE", margin, yPos);
-        yPos += 5;
-        
-        doc.setFontSize(8);
-        doc.setFont(undefined, 'normal');
-        const emitenteText = [
-            `Nome: ${nfeData.emitente.nome.substring(0, 40) + (nfeData.emitente.nome.length > 40 ? '...' : '')}`,
-            `CNPJ: ${formatCNPJ(nfeData.emitente.cnpj)}`,
-            `Cidade: ${nfeData.emitente.cidade}`
-        ];
-        
-        emitenteText.forEach(line => {
-            if (yPos < pageHeight - 20) {
-                doc.text(line, margin, yPos);
-                yPos += 4;
-            }
-        });
-        
-        // Destinatário (coluna direita)
-        yPos = margin + 40; // Reset Y para mesma linha
-        doc.setFontSize(9);
-        doc.setFont(undefined, 'bold');
-        doc.text("DESTINATÁRIO", margin + colWidth + margin, yPos);
-        yPos += 5;
-        
-        doc.setFontSize(8);
-        doc.setFont(undefined, 'normal');
-        const destinatarioText = [
-            `Nome: ${nfeData.destinatario.nome.substring(0, 40) + (nfeData.destinatario.nome.length > 40 ? '...' : '')}`,
-            `CNPJ: ${formatCNPJ(nfeData.destinatario.cnpj)}`,
-            `Cidade: ${nfeData.destinatario.cidade}`
-        ];
-        
-        destinatarioText.forEach(line => {
-            if (yPos < pageHeight - 20) {
-                doc.text(line, margin + colWidth + margin, yPos);
-                yPos += 4;
-            }
-        });
-        
-        // Posição para tabela (abaixo das informações)
-        yPos = margin + 60;
-        
-        // Tabela de produtos com larguras ajustadas
         doc.setFontSize(10);
-        doc.setFont(undefined, 'bold');
-        doc.text("PRODUTOS/SERVIÇOS", margin, yPos);
+        doc.setFont(undefined, 'normal');
+        doc.text(`Nº ${nfeData.nfeInfo.numero}`, margin + 20, yPos);
+        doc.text(`Série ${nfeData.nfeInfo.serie}`, margin + 60, yPos);
+        doc.text(`Emissão ${formatDate(nfeData.nfeInfo.dataEmissao)}`, margin + 100, yPos);
+        doc.text(`Valor Total: R$ ${formatCurrency(nfeData.nfeInfo.valorTotal)}`, margin + 160, yPos);
         yPos += 7;
         
-        // Configuração da tabela com colunas otimizadas
+        // Emitente
+        doc.setFontSize(11);
+        doc.setFont(undefined, 'bold');
+        doc.text("EMITENTE", margin, yPos);
+        
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'normal');
+        doc.text(`${nfeData.emitente.nome}`, margin + 40, yPos);
+        doc.text(`CNPJ: ${formatCNPJ(nfeData.emitente.cnpj)}`, margin + 140, yPos);
+        yPos += 6;
+        doc.text(`${nfeData.emitente.cidade}`, margin + 40, yPos);
+        yPos += 10;
+        
+        // Destinatário
+        doc.setFontSize(11);
+        doc.setFont(undefined, 'bold');
+        doc.text("DESTINATÁRIO", margin, yPos);
+        
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'normal');
+        doc.text(`${nfeData.destinatario.nome}`, margin + 40, yPos);
+        doc.text(`CNPJ: ${formatCNPJ(nfeData.destinatario.cnpj)}`, margin + 140, yPos);
+        yPos += 6;
+        doc.text(`${nfeData.destinatario.cidade}`, margin + 40, yPos);
+        yPos += 15;
+        
+        // Tabela de produtos - OTIMIZADA para landscape
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.text("PRODUTOS/SERVIÇOS", margin, yPos);
+        yPos += 8;
+        
+        // Cabeçalhos da tabela
         const headers = [
-            ["Item", "Código", "Descrição", "Lote/Validade", "Qtd", "Valor R$"]
+            ["Item", "Código", "Descrição", "Validade/Lote", "Qtd", "Valor R$"]
         ];
         
+        // Dados da tabela com formatação otimizada
         const data = produtosExibidos.map((prod, index) => {
-            // Descrição reduzida
-            const descricaoReduzida = prod.descricao.length > 25 ? 
-                prod.descricao.substring(0, 25) + '...' : prod.descricao;
+            // Descrição reduzida mas legível
+            const descricao = prod.descricao.length > 35 ? 
+                prod.descricao.substring(0, 35) + '...' : prod.descricao;
             
-            // Lote/Validade compacto para PDF
-            const loteCompacto = formatarLoteParaPDF(prod.loteInfo);
+            // Lote/Validade formatado para PDF (mostra múltiplos se houver)
+            let loteValidade = formatarLoteParaPDF(prod.loteInfo);
             
             return [
                 (index + 1).toString(),
                 prod.codigo,
-                descricaoReduzida,
-                loteCompacto,
+                descricao,
+                loteValidade,
                 formatNumber(prod.quantidade),
-                formatCurrency(prod.valorTotal)
+                `R$ ${formatCurrency(prod.valorTotal)}`
             ];
         });
         
-        // Configuração das colunas (larguras em mm)
+        // Larguras das colunas (total 277mm em landscape A4)
         const columnStyles = {
-            0: { cellWidth: 12, halign: 'center' }, // Item
-            1: { cellWidth: 25 }, // Código
-            2: { cellWidth: 50 }, // Descrição
-            3: { cellWidth: 45 }, // Lote/Validade
-            4: { cellWidth: 18, halign: 'right' }, // Qtd
-            5: { cellWidth: 25, halign: 'right' } // Valor
+            0: { cellWidth: 15, halign: 'center' },  // Item
+            1: { cellWidth: 25 },                    // Código
+            2: { cellWidth: 60 },                    // Descrição (mais larga)
+            3: { cellWidth: 55 },                    // Validade/Lote (mais larga)
+            4: { cellWidth: 20, halign: 'right' },   // Qtd
+            5: { cellWidth: 30, halign: 'right' }    // Valor
         };
         
         doc.autoTable({
@@ -630,49 +618,64 @@ function exportToPDF() {
             body: data,
             margin: { left: margin, right: margin },
             styles: { 
-                fontSize: 7, // Fonte menor
-                cellPadding: 1.5, // Menos padding
-                overflow: 'linebreak', // Quebra de linha
-                cellWidth: 'wrap' // Ajusta largura
+                fontSize: 8,
+                cellPadding: 2,
+                overflow: 'linebreak',
+                cellWidth: 'wrap',
+                lineColor: [200, 200, 200],
+                lineWidth: 0.1
             },
             headStyles: { 
                 fillColor: [41, 128, 185], 
                 textColor: 255,
-                fontSize: 8,
-                fontStyle: 'bold'
+                fontSize: 9,
+                fontStyle: 'bold',
+                halign: 'center'
             },
-            alternateRowStyles: { fillColor: [245, 245, 245] },
+            alternateRowStyles: { fillColor: [250, 250, 250] },
             columnStyles: columnStyles,
-            tableWidth: 'auto',
+            tableWidth: pageWidth - 2 * margin,
             didParseCell: function(data) {
-                // Garante que texto muito longo seja truncado
-                if (data.cell.raw && data.cell.raw.length > 60) {
-                    data.cell.text = data.cell.raw.substring(0, 60) + '...';
+                // Ajusta células com texto muito longo
+                if (data.column.index === 2 && data.cell.raw && data.cell.raw.length > 45) {
+                    data.cell.text = data.cell.raw.substring(0, 45) + '...';
+                }
+                if (data.column.index === 3 && data.cell.raw && data.cell.raw.length > 40) {
+                    data.cell.text = data.cell.raw.substring(0, 40) + '...';
                 }
             },
+            willDrawCell: function(data) {
+                // Adiciona bordas mais claras
+                data.doc.setDrawColor(200, 200, 200);
+            },
             didDrawPage: function(data) {
-                // Adiciona número da página
-                doc.setFontSize(8);
-                doc.text(`Página ${data.pageNumber}`, pageWidth / 2, pageHeight - 5, { align: 'center' });
+                // Número da página no rodapé
+                doc.setFontSize(9);
+                doc.setTextColor(100, 100, 100);
+                doc.text(`Página ${data.pageNumber}`, pageWidth / 2, pageHeight - 10, { align: 'center' });
+                
+                // Linha separadora
+                doc.setDrawColor(200, 200, 200);
+                doc.line(margin, pageHeight - 15, pageWidth - margin, pageHeight - 15);
             }
         });
         
-        // Última posição Y após a tabela
+        // Pega a posição final após a tabela
         let finalY = doc.lastAutoTable.finalY || yPos + 100;
         
         // Informações adicionais em nova página se necessário
-        if (finalY > pageHeight - 40) {
-            doc.addPage();
-            finalY = margin;
-        }
-        
-        // Informações adicionais (se couber)
         if (nfeData.informacoesAdicionais && nfeData.informacoesAdicionais !== "Nenhuma informação adicional") {
-            doc.setFontSize(10);
+            if (finalY > pageHeight - 30) {
+                doc.addPage();
+                finalY = margin;
+            }
+            
+            doc.setFontSize(11);
             doc.setFont(undefined, 'bold');
+            doc.setTextColor(44, 62, 80);
             doc.text("INFORMAÇÕES ADICIONAIS", margin, finalY + 10);
             
-            doc.setFontSize(8);
+            doc.setFontSize(9);
             doc.setFont(undefined, 'normal');
             const infText = nfeData.informacoesAdicionais;
             if (infText) {
@@ -727,14 +730,12 @@ function formatChaveAcesso(chave) {
 function formatDate(dateString) {
     if (!dateString || dateString === "N/A") return "N/A";
     try {
-        // Remove horário se existir
         const datePart = dateString.split('T')[0];
         const [year, month, day] = datePart.split('-');
         if (year && month && day) {
             return `${day.padStart(2, '0')}/${month.padStart(2, '0')}/${year}`;
         }
         
-        // Tenta formato brasileiro
         const [day2, month2, year2] = dateString.split('/');
         if (day2 && month2 && year2) {
             return `${day2.padStart(2, '0')}/${month2.padStart(2, '0')}/${year2}`;
