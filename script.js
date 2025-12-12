@@ -326,6 +326,43 @@ function formatarLoteParaExportacao(loteInfo) {
     return exportacao || 'N/A';
 }
 
+/**
+ * Formata lote/validade para PDF (mais compacto)
+ */
+function formatarLoteParaPDF(loteInfo) {
+    if (loteInfo.textoOriginal) {
+        // Formato compacto: "V:02/2028 L:MAS202501-02/28"
+        let resultado = '';
+        
+        if (loteInfo.validade !== "N/A") {
+            // Pega apenas a primeira validade
+            const primeiraValidade = loteInfo.validade.split(',')[0];
+            resultado += `V:${primeiraValidade.trim()} `;
+        }
+        
+        if (loteInfo.lote !== "N/A") {
+            // Pega apenas o primeiro lote
+            const primeiroLote = loteInfo.lote.split(',')[0];
+            resultado += `L:${primeiroLote.trim()}`;
+        }
+        
+        return resultado.trim();
+    }
+    
+    // Fallback
+    let resultado = '';
+    if (loteInfo.validade !== "N/A") {
+        const primeiraValidade = loteInfo.validade.split(',')[0];
+        resultado += `V:${primeiraValidade.trim()} `;
+    }
+    if (loteInfo.lote !== "N/A") {
+        const primeiroLote = loteInfo.lote.split(',')[0];
+        resultado += `L:${primeiroLote.trim()}`;
+    }
+    
+    return resultado.trim() || 'N/A';
+}
+
 // ============================================
 // FUNÇÕES DE EXPORTAÇÃO (Excel e PDF)
 // ============================================
@@ -463,157 +500,184 @@ function exportToPDF() {
     
     try {
         const { jsPDF } = window.jspdf;
-        const doc = new jsPDF('p', 'mm', 'a4');
+        const doc = new jsPDF('l', 'mm', 'a4'); // 'l' para landscape (paisagem)
         
         // Configurações
         const pageWidth = doc.internal.pageSize.getWidth();
-        const margin = 15;
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const margin = 10;
         let yPos = margin;
         
         // Cabeçalho
-        doc.setFontSize(16);
+        doc.setFontSize(14);
         doc.setTextColor(41, 128, 185);
         doc.text("RELATÓRIO DE NOTA FISCAL ELETRÔNICA", pageWidth / 2, yPos, { align: 'center' });
-        yPos += 8;
+        yPos += 7;
         
-        doc.setFontSize(10);
+        doc.setFontSize(9);
         doc.setTextColor(100, 100, 100);
         doc.text(`Data de exportação: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`, pageWidth / 2, yPos, { align: 'center' });
-        yPos += 15;
+        yPos += 12;
         
-        // Informações básicas
-        doc.setFontSize(12);
+        // Informações básicas (mais compactas)
+        doc.setFontSize(10);
         doc.setTextColor(44, 62, 80);
         doc.setFont(undefined, 'bold');
         doc.text("INFORMAÇÕES DA NF-e", margin, yPos);
-        yPos += 8;
+        yPos += 6;
         
-        doc.setFontSize(10);
+        doc.setFontSize(8);
         doc.setFont(undefined, 'normal');
         doc.text(`Número: ${nfeData.nfeInfo.numero || 'N/A'}`, margin, yPos);
-        doc.text(`Série: ${nfeData.nfeInfo.serie || 'N/A'}`, pageWidth / 2, yPos);
+        doc.text(`Série: ${nfeData.nfeInfo.serie || 'N/A'}`, margin + 60, yPos);
+        doc.text(`Data: ${formatDate(nfeData.nfeInfo.dataEmissao)}`, margin + 120, yPos);
+        doc.text(`Valor: R$ ${formatCurrency(nfeData.nfeInfo.valorTotal)}`, margin + 180, yPos);
         yPos += 5;
-        doc.text(`Data Emissão: ${formatDate(nfeData.nfeInfo.dataEmissao)}`, margin, yPos);
-        doc.text(`Valor Total: R$ ${formatCurrency(nfeData.nfeInfo.valorTotal)}`, pageWidth / 2, yPos);
-        yPos += 5;
-        doc.text(`Chave de Acesso: ${nfeData.nfeInfo.chaveAcesso || 'N/A'}`, margin, yPos);
+        doc.text(`Chave: ${nfeData.nfeInfo.chaveAcesso ? nfeData.nfeInfo.chaveAcesso.substring(0, 50) + '...' : 'N/A'}`, margin, yPos);
         yPos += 10;
+        
+        // Emitente e Destinatário lado a lado
+        const colWidth = (pageWidth - 3 * margin) / 2;
         
         // Emitente
-        doc.setFontSize(11);
+        doc.setFontSize(9);
         doc.setFont(undefined, 'bold');
         doc.text("EMITENTE", margin, yPos);
-        yPos += 7;
+        yPos += 5;
         
-        doc.setFontSize(9);
+        doc.setFontSize(8);
         doc.setFont(undefined, 'normal');
-        doc.text(`Nome: ${nfeData.emitente.nome || 'N/A'}`, margin, yPos);
-        yPos += 5;
-        doc.text(`CNPJ: ${formatCNPJ(nfeData.emitente.cnpj) || 'N/A'}`, margin, yPos);
-        yPos += 5;
-        doc.text(`Endereço: ${nfeData.emitente.endereco || 'N/A'}`, margin, yPos);
-        yPos += 5;
-        doc.text(`Cidade/UF: ${nfeData.emitente.cidade || 'N/A'}`, margin, yPos);
-        yPos += 10;
+        const emitenteText = [
+            `Nome: ${nfeData.emitente.nome.substring(0, 40) + (nfeData.emitente.nome.length > 40 ? '...' : '')}`,
+            `CNPJ: ${formatCNPJ(nfeData.emitente.cnpj)}`,
+            `Cidade: ${nfeData.emitente.cidade}`
+        ];
         
-        // Destinatário
-        doc.setFontSize(11);
+        emitenteText.forEach(line => {
+            if (yPos < pageHeight - 20) {
+                doc.text(line, margin, yPos);
+                yPos += 4;
+            }
+        });
+        
+        // Destinatário (coluna direita)
+        yPos = margin + 40; // Reset Y para mesma linha
+        doc.setFontSize(9);
         doc.setFont(undefined, 'bold');
-        doc.text("DESTINATÁRIO", margin, yPos);
-        yPos += 7;
+        doc.text("DESTINATÁRIO", margin + colWidth + margin, yPos);
+        yPos += 5;
         
-        doc.setFontSize(9);
+        doc.setFontSize(8);
         doc.setFont(undefined, 'normal');
-        doc.text(`Nome: ${nfeData.destinatario.nome || 'N/A'}`, margin, yPos);
-        yPos += 5;
-        doc.text(`CNPJ/CPF: ${formatCNPJ(nfeData.destinatario.cnpj) || 'N/A'}`, margin, yPos);
-        yPos += 5;
-        doc.text(`Cidade/UF: ${nfeData.destinatario.cidade || 'N/A'}`, margin, yPos);
-        yPos += 15;
+        const destinatarioText = [
+            `Nome: ${nfeData.destinatario.nome.substring(0, 40) + (nfeData.destinatario.nome.length > 40 ? '...' : '')}`,
+            `CNPJ: ${formatCNPJ(nfeData.destinatario.cnpj)}`,
+            `Cidade: ${nfeData.destinatario.cidade}`
+        ];
         
-        // Tabela de produtos
-        doc.setFontSize(12);
+        destinatarioText.forEach(line => {
+            if (yPos < pageHeight - 20) {
+                doc.text(line, margin + colWidth + margin, yPos);
+                yPos += 4;
+            }
+        });
+        
+        // Posição para tabela (abaixo das informações)
+        yPos = margin + 60;
+        
+        // Tabela de produtos com larguras ajustadas
+        doc.setFontSize(10);
         doc.setFont(undefined, 'bold');
         doc.text("PRODUTOS/SERVIÇOS", margin, yPos);
-        yPos += 10;
+        yPos += 7;
         
-        // Para PDF, usamos os dados exibidos na tabela
-        const headers = [["Código", "Descrição", "Lote/Validade", "Qtd", "Valor Total"]];
-        const data = produtosExibidos.map(prod => {
-            // Formata as informações de lote para PDF
-            const lotePDF = formatarLoteParaExportacao(prod.loteInfo);
+        // Configuração da tabela com colunas otimizadas
+        const headers = [
+            ["Item", "Código", "Descrição", "Lote/Validade", "Qtd", "Valor R$"]
+        ];
+        
+        const data = produtosExibidos.map((prod, index) => {
+            // Descrição reduzida
+            const descricaoReduzida = prod.descricao.length > 25 ? 
+                prod.descricao.substring(0, 25) + '...' : prod.descricao;
+            
+            // Lote/Validade compacto para PDF
+            const loteCompacto = formatarLoteParaPDF(prod.loteInfo);
             
             return [
+                (index + 1).toString(),
                 prod.codigo,
-                prod.descricao.length > 25 ? prod.descricao.substring(0, 25) + '...' : prod.descricao,
-                lotePDF.length > 30 ? lotePDF.substring(0, 30) + '...' : lotePDF,
+                descricaoReduzida,
+                loteCompacto,
                 formatNumber(prod.quantidade),
-                `R$ ${formatCurrency(prod.valorTotal)}`
+                formatCurrency(prod.valorTotal)
             ];
         });
         
-        // Adiciona total
-        const totalProdutos = produtosExibidos.reduce((sum, prod) => sum + parseFloat(prod.valorTotal || 0), 0);
-        data.push(["", "", "", "TOTAL:", `R$ ${formatCurrency(totalProdutos.toString())}`]);
+        // Configuração das colunas (larguras em mm)
+        const columnStyles = {
+            0: { cellWidth: 12, halign: 'center' }, // Item
+            1: { cellWidth: 25 }, // Código
+            2: { cellWidth: 50 }, // Descrição
+            3: { cellWidth: 45 }, // Lote/Validade
+            4: { cellWidth: 18, halign: 'right' }, // Qtd
+            5: { cellWidth: 25, halign: 'right' } // Valor
+        };
         
         doc.autoTable({
             startY: yPos,
             head: headers,
             body: data,
             margin: { left: margin, right: margin },
-            styles: { fontSize: 8, cellPadding: 2 },
-            headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+            styles: { 
+                fontSize: 7, // Fonte menor
+                cellPadding: 1.5, // Menos padding
+                overflow: 'linebreak', // Quebra de linha
+                cellWidth: 'wrap' // Ajusta largura
+            },
+            headStyles: { 
+                fillColor: [41, 128, 185], 
+                textColor: 255,
+                fontSize: 8,
+                fontStyle: 'bold'
+            },
             alternateRowStyles: { fillColor: [245, 245, 245] },
-            columnStyles: {
-                0: { cellWidth: 20 },
-                1: { cellWidth: 35 },
-                2: { cellWidth: 50 },
-                3: { cellWidth: 15, halign: 'right' },
-                4: { cellWidth: 25, halign: 'right' }
+            columnStyles: columnStyles,
+            tableWidth: 'auto',
+            didParseCell: function(data) {
+                // Garante que texto muito longo seja truncado
+                if (data.cell.raw && data.cell.raw.length > 60) {
+                    data.cell.text = data.cell.raw.substring(0, 60) + '...';
+                }
             },
             didDrawPage: function(data) {
                 // Adiciona número da página
-                doc.setFontSize(10);
-                doc.text(`Página ${data.pageNumber}`, pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+                doc.setFontSize(8);
+                doc.text(`Página ${data.pageNumber}`, pageWidth / 2, pageHeight - 5, { align: 'center' });
             }
         });
         
         // Última posição Y após a tabela
         let finalY = doc.lastAutoTable.finalY || yPos + 100;
         
-        // Informações adicionais (se couber)
-        if (finalY < doc.internal.pageSize.getHeight() - 50) {
-            doc.setFontSize(12);
-            doc.setFont(undefined, 'bold');
-            doc.text("INFORMAÇÕES ADICIONAIS", margin, finalY + 15);
-            
-            doc.setFontSize(9);
-            doc.setFont(undefined, 'normal');
-            const infText = nfeData.informacoesAdicionais;
-            if (infText && infText !== "Nenhuma informação adicional") {
-                const lines = doc.splitTextToSize(infText, pageWidth - 2 * margin);
-                doc.text(lines, margin, finalY + 25);
-            } else {
-                doc.text("Nenhuma informação adicional", margin, finalY + 25);
-            }
-        } else {
-            // Adiciona nova página para informações adicionais
+        // Informações adicionais em nova página se necessário
+        if (finalY > pageHeight - 40) {
             doc.addPage();
-            yPos = margin;
-            
-            doc.setFontSize(12);
+            finalY = margin;
+        }
+        
+        // Informações adicionais (se couber)
+        if (nfeData.informacoesAdicionais && nfeData.informacoesAdicionais !== "Nenhuma informação adicional") {
+            doc.setFontSize(10);
             doc.setFont(undefined, 'bold');
-            doc.text("INFORMAÇÕES ADICIONAIS", margin, yPos);
-            yPos += 10;
+            doc.text("INFORMAÇÕES ADICIONAIS", margin, finalY + 10);
             
-            doc.setFontSize(9);
+            doc.setFontSize(8);
             doc.setFont(undefined, 'normal');
             const infText = nfeData.informacoesAdicionais;
-            if (infText && infText !== "Nenhuma informação adicional") {
+            if (infText) {
                 const lines = doc.splitTextToSize(infText, pageWidth - 2 * margin);
-                doc.text(lines, margin, yPos);
-            } else {
-                doc.text("Nenhuma informação adicional", margin, yPos);
+                doc.text(lines, margin, finalY + 18);
             }
         }
         
