@@ -1,79 +1,354 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Leitor de NF-e XML - Exportável</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1><i class="fas fa-file-invoice"></i> Leitor de NF-e XML</h1>
-            <p>Importe arquivos XML de Nota Fiscal Eletrônica e exporte para Excel ou PDF</p>
-        </div>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
 
-        <div class="upload-section">
-            <h3><i class="fas fa-cloud-upload-alt"></i> Selecione o Arquivo XML</h3>
-            <input type="file" id="xmlFile" accept=".xml,text/xml" />
-            <p style="color: #7f8c8d; font-size: 0.9rem; margin-top: 10px;">
-                Formato aceito: XML de NF-e (Nota Fiscal Eletrônica)
-            </p>
-        </div>
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    padding: 20px;
+    min-height: 100vh;
+}
 
-        <div class="export-buttons">
-            <button class="export-btn excel" onclick="exportToExcel()" disabled id="excelBtn">
-                <i class="fas fa-file-excel"></i> Exportar para Excel
-            </button>
-            <button class="export-btn pdf" onclick="exportToPDF()" disabled id="pdfBtn">
-                <i class="fas fa-file-pdf"></i> Exportar para PDF
-            </button>
-        </div>
+.container {
+    max-width: 1300px;
+    margin: 0 auto;
+    background: white;
+    padding: 30px;
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+}
 
-        <div id="invoiceInfo" style="display: none;">
-            <div class="info-grid">
-                <div class="info-card">
-                    <h3><i class="fas fa-building"></i> Emitente</h3>
-                    <div id="emitente"></div>
-                </div>
-                <div class="info-card">
-                    <h3><i class="fas fa-user-tie"></i> Destinatário</h3>
-                    <div id="destinatario"></div>
-                </div>
-                <div class="info-card">
-                    <h3><i class="fas fa-info-circle"></i> Informações da NF-e</h3>
-                    <div id="nfeInfo"></div>
-                </div>
-                <div class="info-card">
-                    <h3><i class="fas fa-calculator"></i> Totais</h3>
-                    <div id="totais"></div>
-                </div>
-                <div class="info-card inf-adicional">
-                    <h3><i class="fas fa-sticky-note"></i> Informações Adicionais</h3>
-                    <div id="infAdicionais"></div>
-                </div>
-            </div>
+.header {
+    text-align: center;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid #eaeaea;
+}
 
-            <div class="products-section">
-                <h2><i class="fas fa-boxes"></i> Produtos/Serviços</h2>
-                <div id="productsTable"></div>
-            </div>
-        </div>
+.header h1 {
+    color: #2c3e50;
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+}
 
-        <div id="noData" class="no-data">
-            <i class="fas fa-file-alt fa-3x" style="color: #bdc3c7; margin-bottom: 20px;"></i>
-            <h3>Nenhum XML carregado</h3>
-            <p>Selecione um arquivo XML de NF-e para visualizar as informações</p>
-        </div>
-    </div>
+.header p {
+    color: #7f8c8d;
+    font-size: 1.1rem;
+}
 
-    <!-- Bibliotecas externas -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+.upload-section {
+    background: #f8f9fa;
+    padding: 25px;
+    border-radius: 10px;
+    border: 2px dashed #3498db;
+    text-align: center;
+    margin-bottom: 30px;
+    transition: all 0.3s;
+}
+
+.upload-section:hover {
+    border-color: #2980b9;
+    background: #e3f2fd;
+}
+
+.upload-section input[type="file"] {
+    display: block;
+    margin: 15px auto;
+    padding: 10px;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    width: 100%;
+    max-width: 400px;
+}
+
+.export-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin: 20px 0 40px;
+    flex-wrap: wrap;
+}
+
+.export-btn {
+    padding: 12px 30px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.export-btn.excel {
+    background: linear-gradient(135deg, #217346 0%, #2e8b57 100%);
+    color: white;
+}
+
+.export-btn.pdf {
+    background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+    color: white;
+}
+
+.export-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.export-btn:active {
+    transform: translateY(0);
+}
+
+.export-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.info-card {
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border-left: 4px solid #3498db;
+}
+
+.info-card.inf-adicional {
+    border-left-color: #9b59b6;
+    grid-column: 1 / -1;
+}
+
+.info-card h3 {
+    color: #2c3e50;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.info-card h3 i {
+    color: #3498db;
+}
+
+.info-card.inf-adicional h3 i {
+    color: #9b59b6;
+}
+
+.info-item {
+    margin: 8px 0;
+    display: flex;
+    justify-content: space-between;
+    border-bottom: 1px dotted #eee;
+    padding-bottom: 8px;
+}
+
+.info-label {
+    font-weight: 600;
+    color: #34495e;
+    font-size: 0.9rem;
+    min-width: 150px;
+}
+
+.info-value {
+    color: #2c3e50;
+    text-align: right;
+    flex: 1;
+    word-break: break-word;
+}
+
+.info-text {
+    color: #2c3e50;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 5px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.products-section {
+    margin-top: 40px;
+}
+
+.products-section h2 {
+    color: #2c3e50;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #3498db;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    background: white;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+thead {
+    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+    color: white;
+}
+
+th {
+    padding: 15px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+tbody tr {
+    border-bottom: 1px solid #eee;
+    transition: background 0.3s;
+}
+
+tbody tr:hover {
+    background: #f8f9fa;
+}
+
+td {
+    padding: 12px 15px;
+    color: #2c3e50;
+    font-size: 0.9rem;
+}
+
+tbody tr:nth-child(even) {
+    background: #f8f9fa;
+}
+
+tbody tr:nth-child(even):hover {
+    background: #e9ecef;
+}
+
+.currency {
+    text-align: right;
+    font-family: 'Courier New', monospace;
+    font-weight: 600;
+}
+
+.lote-info {
+    font-size: 0.85rem;
+    font-family: 'Courier New', monospace;
+    white-space: pre-wrap;
+    max-width: 200px;
+}
+
+.lote-info-line {
+    display: block;
+    line-height: 1.4;
+    margin: 3px 0;
+}
+
+.lote-label {
+    font-weight: bold;
+    color: #2c3e50;
+}
+
+.lote-value {
+    color: #27ae60;
+}
+
+.source-badge {
+    display: inline-block;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    font-weight: bold;
+    margin-left: 5px;
+    vertical-align: middle;
+}
+
+.badge-campo {
+    background: #d4edda;
+    color: #155724;
+}
+
+.badge-descricao {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.badge-infAdProd {
+    background: #d1ecf1;
+    color: #0c5460;
+}
+
+.badge-infCpl {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.no-data {
+    text-align: center;
+    color: #7f8c8d;
+    font-style: italic;
+    padding: 40px;
+    background: #f8f9fa;
+    border-radius: 10px;
+    margin: 20px 0;
+}
+
+@media (max-width: 768px) {
+    .container {
+        padding: 15px;
+    }
     
-    <!-- Script principal -->
-    <script src="script.js"></script>
-</body>
-</html>
+    .info-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .export-buttons {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .export-btn {
+        width: 100%;
+        max-width: 300px;
+        justify-content: center;
+    }
+    
+    table {
+        display: block;
+        overflow-x: auto;
+    }
+    
+    .info-item {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .info-label {
+        margin-bottom: 5px;
+    }
+    
+    .info-value {
+        text-align: left;
+        width: 100%;
+    }
+}
