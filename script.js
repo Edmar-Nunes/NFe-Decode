@@ -152,8 +152,8 @@ function parseXML(xml) {
             const prod = det.querySelector("prod");
             const xProd = getTag("xProd", prod);
             
-            // BUSCA COMPLETA DE LOTE, VALIDADE E FABRICAÇÃO
-            const loteInfo = buscarLoteValidadeFabricacao(det, xProd, xml);
+            // BUSCA CORRETA DE LOTE E VALIDADE
+            const loteInfo = extrairLoteValidadeFabricacao(det);
             
             // Formatar as informações de lote para exibição
             const loteDisplay = formatarLoteDisplay(loteInfo);
@@ -172,12 +172,12 @@ function parseXML(xml) {
                 </tr>
             `;
             
-            // Adiciona ao array de produtos exibidos (EXATAMENTE COMO NA TABELA)
+            // Adiciona ao array de produtos exibidos
             produtosExibidos.push({
                 codigo: getTag("cProd", prod),
                 descricao: xProd,
-                loteDisplay: loteDisplay, // Mantém o formato exibido
-                loteInfo: loteInfo, // Mantém também as informações originais para exportação detalhada
+                loteDisplay: loteDisplay,
+                loteInfo: loteInfo,
                 ean: getTag("cEAN", prod),
                 ncm: getTag("NCM", prod),
                 quantidade: getTag("qCom", prod),
@@ -212,7 +212,7 @@ function parseXML(xml) {
                 valorTotal: getTag("vNF", icmsTot),
                 chaveAcesso: getTag("chNFe", xml) || infNFe.getAttribute("Id")?.replace('NFe', '')
             },
-            produtos: produtosExibidos, // Usa os produtos exibidos
+            produtos: produtosExibidos,
             informacoesAdicionais: infCpl ? infCpl.textContent : "Nenhuma informação adicional"
         };
         
@@ -229,301 +229,101 @@ function parseXML(xml) {
 // ============================================
 
 /**
- * FUNÇÃO PRINCIPAL: Busca lote, validade e fabricação seguindo ordem de prioridade
+ * FUNÇÃO CORRIGIDA: Extrai lote, validade e fabricação do elemento det
  */
-function buscarLoteValidadeFabricacao(detElement, xProd, xmlDoc) {
-    const resultado = {
-        lote: "N/A",
-        validade: "N/A",
-        fabricacao: "N/A",
-        loteSource: "",
-        validadeSource: "",
-        fabricacaoSource: ""
+function extrairLoteValidadeFabricacao(detElement) {
+    // Procura a tag infAdProd DENTRO do elemento det
+    const infAdProdElement = detElement.querySelector("infAdProd");
+    
+    if (!infAdProdElement || !infAdProdElement.textContent) {
+        return {
+            lote: "N/A",
+            validade: "N/A",
+            fabricacao: "N/A",
+            textoOriginal: ""
+        };
+    }
+    
+    const texto = infAdProdElement.textContent.trim();
+    
+    // Extrai todas as ocorrências de VALIDADE e LOTE
+    const lotes = extrairTodasOcorrencias(texto, "LOTE:");
+    const validades = extrairTodasOcorrencias(texto, "VALIDADE:");
+    const fabricacoes = extrairTodasOcorrencias(texto, "FABRICAÇÃO:");
+    
+    return {
+        lote: lotes.length > 0 ? lotes.join(', ') : "N/A",
+        validade: validades.length > 0 ? validades.join(', ') : "N/A",
+        fabricacao: fabricacoes.length > 0 ? fabricacoes.join(', ') : "N/A",
+        textoOriginal: texto
     };
-
-    // ETAPA 1: BUSCAR NOS CAMPOS OFICIAIS (PRIORIDADE A)
-    // Caminho: det → prod → rastro → (nLote, dVal, dFab)
-    const prod = detElement.querySelector("prod");
-    if (prod) {
-        const rastro = prod.querySelector("rastro");
-        if (rastro) {
-            // Lote no campo oficial nLote
-            const nLoteElement = rastro.querySelector("nLote");
-            if (nLoteElement && nLoteElement.textContent.trim()) {
-                resultado.lote = nLoteElement.textContent.trim();
-                resultado.loteSource = "campo";
-            }
-            
-            // Validade no campo oficial dVal
-            const dValElement = rastro.querySelector("dVal");
-            if (dValElement && dValElement.textContent.trim()) {
-                resultado.validade = formatarDataExport(dValElement.textContent.trim());
-                resultado.validadeSource = "campo";
-            }
-            
-            // Fabricação no campo oficial dFab
-            const dFabElement = rastro.querySelector("dFab");
-            if (dFabElement && dFabElement.textContent.trim()) {
-                resultado.fabricacao = formatarDataExport(dFabElement.textContent.trim());
-                resultado.fabricacaoSource = "campo";
-            }
-        }
-        
-        // ETAPA 2: BUSCAR NA DESCRIÇÃO (PRIORIDADE B)
-        // Se algum campo estiver faltando, procura na descrição
-        if (xProd) {
-            // Busca lote
-            if (resultado.lote === "N/A") {
-                const loteEncontrado = buscarNaDescricao(xProd, ['LOTE', 'LT', 'L']);
-                if (loteEncontrado) {
-                    resultado.lote = loteEncontrado;
-                    resultado.loteSource = "descricao";
-                }
-            }
-            
-            // Busca validade
-            if (resultado.validade === "N/A") {
-                const validadeEncontrada = buscarNaDescricao(xProd, ['VALIDADE', 'VAL', 'VENC', 'V']);
-                if (validadeEncontrada) {
-                    resultado.validade = formatarDataExport(validadeEncontrada);
-                    resultado.validadeSource = "descricao";
-                }
-            }
-            
-            // Busca fabricação
-            if (resultado.fabricacao === "N/A") {
-                const fabricacaoEncontrada = buscarNaDescricao(xProd, ['FABRICAÇÃO', 'FAB', 'FABRIC', 'DFAB']);
-                if (fabricacaoEncontrada) {
-                    resultado.fabricacao = formatarDataExport(fabricacaoEncontrada);
-                    resultado.fabricacaoSource = "descricao";
-                }
-            }
-        }
-        
-        // ETAPA 3: BUSCAR EM INFADPROD (PRIORIDADE C)
-        const infAdProdElement = prod.querySelector("infAdProd");
-        if (infAdProdElement) {
-            const infAdProd = infAdProdElement.textContent;
-            
-            if (resultado.lote === "N/A") {
-                const loteEncontrado = buscarNaDescricao(infAdProd, ['LOTE', 'LT', 'L']);
-                if (loteEncontrado) {
-                    resultado.lote = loteEncontrado;
-                    resultado.loteSource = "infAdProd";
-                }
-            }
-            
-            if (resultado.validade === "N/A") {
-                const validadeEncontrada = buscarNaDescricao(infAdProd, ['VALIDADE', 'VAL', 'VENC', 'V']);
-                if (validadeEncontrada) {
-                    resultado.validade = formatarDataExport(validadeEncontrada);
-                    resultado.validadeSource = "infAdProd";
-                }
-            }
-            
-            if (resultado.fabricacao === "N/A") {
-                const fabricacaoEncontrada = buscarNaDescricao(infAdProd, ['FABRICAÇÃO', 'FAB', 'FABRIC', 'DFAB']);
-                if (fabricacaoEncontrada) {
-                    resultado.fabricacao = formatarDataExport(fabricacaoEncontrada);
-                    resultado.fabricacaoSource = "infAdProd";
-                }
-            }
-        }
-    }
-    
-    // ETAPA 4: BUSCAR EM INFCPL (PRIORIDADE D)
-    if (resultado.lote === "N/A" || resultado.validade === "N/A" || resultado.fabricacao === "N/A") {
-        const infCplElement = xmlDoc.querySelector("infCpl");
-        if (infCplElement) {
-            const infCpl = infCplElement.textContent;
-            
-            if (resultado.lote === "N/A") {
-                const loteEncontrado = buscarNaDescricao(infCpl, ['LOTE', 'LT', 'L']);
-                if (loteEncontrado) {
-                    resultado.lote = loteEncontrado;
-                    resultado.loteSource = "infCpl";
-                }
-            }
-            
-            if (resultado.validade === "N/A") {
-                const validadeEncontrada = buscarNaDescricao(infCpl, ['VALIDADE', 'VAL', 'VENC', 'V']);
-                if (validadeEncontrada) {
-                    resultado.validade = formatarDataExport(validadeEncontrada);
-                    resultado.validadeSource = "infCpl";
-                }
-            }
-            
-            if (resultado.fabricacao === "N/A") {
-                const fabricacaoEncontrada = buscarNaDescricao(infCpl, ['FABRICAÇÃO', 'FAB', 'FABRIC', 'DFAB']);
-                if (fabricacaoEncontrada) {
-                    resultado.fabricacao = formatarDataExport(fabricacaoEncontrada);
-                    resultado.fabricacaoSource = "infCpl";
-                }
-            }
-        }
-    }
-    
-    return resultado;
 }
 
 /**
- * FUNÇÃO AUXILIAR: Busca informação na descrição baseada em termos-chave
+ * Extrai todas as ocorrências de um prefixo no texto
  */
-function buscarNaDescricao(texto, palavrasChave) {
-    if (!texto) return null;
+function extrairTodasOcorrencias(texto, prefixo) {
+    const resultados = [];
+    const regex = new RegExp(`${prefixo}\\s*([^\\s\\-]+)`, 'gi');
     
-    for (const palavra of palavrasChave) {
-        // Regex para buscar a palavra-chave seguida de valor
-        const regex = new RegExp(`${palavra}[\\s\\:\\-]*([^\\s\\,\\;\\n\\r]+)`, 'i');
-        const match = texto.match(regex);
+    let match;
+    while ((match = regex.exec(texto)) !== null) {
+        // Para evitar loops infinitos
+        if (match.index === regex.lastIndex) {
+            regex.lastIndex++;
+        }
         
-        if (match && match[1]) {
-            // Limpar o valor encontrado
-            let valor = match[1].trim();
-            valor = valor.replace(/[\\,\\.\\;\\:]+$/, '');
-            
-            // Remover parenteses e outros caracteres especiais
-            valor = valor.replace(/[\(\)\[\]\{\}]/g, '');
-            
-            return valor;
+        if (match[1]) {
+            resultados.push(match[1].trim());
         }
     }
     
-    return null;
+    return resultados;
 }
 
 /**
- * FUNÇÃO AUXILIAR: Formata data para exportação (YYYY-MM-DD)
- */
-function formatarDataExport(dataStr) {
-    if (!dataStr) return dataStr;
-    
-    try {
-        // Remove horário se existir
-        const dataLimpa = dataStr.split('T')[0].split(' ')[0];
-        
-        let partes;
-        if (dataLimpa.includes('-')) {
-            partes = dataLimpa.split('-');
-        } else if (dataLimpa.includes('/')) {
-            partes = dataLimpa.split('/');
-        } else if (dataLimpa.length === 8) {
-            // Formato YYYYMMDD
-            return `${dataLimpa.substring(0,4)}-${dataLimpa.substring(4,6)}-${dataLimpa.substring(6,8)}`;
-        } else if (dataLimpa.length === 6) {
-            // Formato DDMMYY
-            const dia = dataLimpa.substring(0,2);
-            const mes = dataLimpa.substring(2,4);
-            const ano = dataLimpa.substring(4,6);
-            return `20${ano}-${mes}-${dia}`;
-        } else {
-            return dataLimpa;
-        }
-        
-        // Determinar formato
-        if (partes[0].length === 4) {
-            // Formato YYYY-MM-DD
-            return `${partes[0]}-${partes[1].padStart(2, '0')}-${partes[2].padStart(2, '0')}`;
-        } else if (partes[2] && partes[2].length === 4) {
-            // Assume formato DD-MM-YYYY
-            return `${partes[2]}-${partes[1].padStart(2, '0')}-${partes[0].padStart(2, '0')}`;
-        } else if (partes[2] && partes[2].length === 2) {
-            // Assume formato DD-MM-YY
-            return `20${partes[2]}-${partes[1].padStart(2, '0')}-${partes[0].padStart(2, '0')}`;
-        }
-        
-        return dataLimpa;
-    } catch (error) {
-        return dataStr;
-    }
-}
-
-/**
- * FUNÇÃO: Formata a exibição das informações de lote (EXATAMENTE COMO NA TABELA)
+ * Formata a exibição das informações de lote para a tabela
  */
 function formatarLoteDisplay(loteInfo) {
+    if (loteInfo.textoOriginal) {
+        // Formata o texto original com quebras de linha
+        return loteInfo.textoOriginal
+            .replace(/\s+-\s+/g, '\n')  // Substitui " - " por quebra de linha
+            .replace(/VALIDADE:/g, '\nVALIDADE:')
+            .replace(/LOTE:/g, '\nLOTE:')
+            .replace(/FABRICAÇÃO:/g, '\nFABRICAÇÃO:')
+            .trim()
+            .replace(/^\n+/, ''); // Remove linha vazia no início
+    }
+    
     let display = '';
+    if (loteInfo.lote !== "N/A") display += `LOTE: ${loteInfo.lote}\n`;
+    if (loteInfo.validade !== "N/A") display += `VALIDADE: ${loteInfo.validade}\n`;
+    if (loteInfo.fabricacao !== "N/A") display += `FABRICAÇÃO: ${loteInfo.fabricacao}`;
     
-    if (loteInfo.lote !== "N/A") {
-        display += `LOTE: ${loteInfo.lote}`;
-        if (loteInfo.loteSource) {
-            display += ` [${getFonteLabel(loteInfo.loteSource)}]`;
-        }
-        display += '\n';
-    }
-    
-    if (loteInfo.validade !== "N/A") {
-        display += `VALIDADE: ${loteInfo.validade}`;
-        if (loteInfo.validadeSource) {
-            display += ` [${getFonteLabel(loteInfo.validadeSource)}]`;
-        }
-        display += '\n';
-    }
-    
-    if (loteInfo.fabricacao !== "N/A") {
-        display += `FABRICAÇÃO: ${loteInfo.fabricacao}`;
-        if (loteInfo.fabricacaoSource) {
-            display += ` [${getFonteLabel(loteInfo.fabricacaoSource)}]`;
-        }
-    }
-    
-    if (display === '') {
-        display = 'Nenhuma informação';
-    }
-    
-    return display.trim();
+    return display.trim() || 'N/A';
 }
 
 /**
- * FUNÇÃO: Formata as informações de lote para exportação (sem quebras de linha)
+ * Formata as informações de lote para exportação (sem quebras de linha)
  */
 function formatarLoteParaExportacao(loteInfo) {
+    if (loteInfo.textoOriginal) {
+        // Para exportação, mantém o texto original mas substitui quebras
+        return loteInfo.textoOriginal
+            .replace(/\n/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+    
     let exportacao = '';
+    if (loteInfo.lote !== "N/A") exportacao += `LOTE: ${loteInfo.lote} | `;
+    if (loteInfo.validade !== "N/A") exportacao += `VALIDADE: ${loteInfo.validade} | `;
+    if (loteInfo.fabricacao !== "N/A") exportacao += `FABRICAÇÃO: ${loteInfo.fabricacao} | `;
     
-    if (loteInfo.lote !== "N/A") {
-        exportacao += `LOTE: ${loteInfo.lote}`;
-        if (loteInfo.loteSource) {
-            exportacao += ` (${getFonteLabel(loteInfo.loteSource)})`;
-        }
-        exportacao += ' | ';
-    }
-    
-    if (loteInfo.validade !== "N/A") {
-        exportacao += `VALIDADE: ${loteInfo.validade}`;
-        if (loteInfo.validadeSource) {
-            exportacao += ` (${getFonteLabel(loteInfo.validadeSource)})`;
-        }
-        exportacao += ' | ';
-    }
-    
-    if (loteInfo.fabricacao !== "N/A") {
-        exportacao += `FABRICAÇÃO: ${loteInfo.fabricacao}`;
-        if (loteInfo.fabricacaoSource) {
-            exportacao += ` (${getFonteLabel(loteInfo.fabricacaoSource)})`;
-        }
-    }
-    
-    // Remove o último separador se existir
     exportacao = exportacao.replace(/\s\|\s$/, '');
     
-    if (exportacao === '') {
-        exportacao = 'Nenhuma informação';
-    }
-    
-    return exportacao;
-}
-
-/**
- * FUNÇÃO AUXILIAR: Retorna label amigável para a fonte
- */
-function getFonteLabel(fonte) {
-    const labels = {
-        'campo': 'Campo',
-        'descricao': 'Texto',
-        'infAdProd': 'Inf.Prod',
-        'infCpl': 'Inf.Cpl'
-    };
-    return labels[fonte] || fonte;
+    return exportacao || 'N/A';
 }
 
 // ============================================
@@ -579,7 +379,7 @@ function exportToExcel() {
         
         XLSX.utils.book_append_sheet(wb, infoSheet, "Informações NF-e");
         
-        // Planilha de produtos (EXATAMENTE COMO NA TABELA)
+        // Planilha de produtos
         const produtosSheetData = [
             ["PRODUTOS/SERVIÇOS", "", "", "", "", "", "", "", ""],
             ["", "", "", "", "", "", "", "", ""],
@@ -587,13 +387,13 @@ function exportToExcel() {
         ];
         
         produtosExibidos.forEach(prod => {
-            // Formata as informações de lote para exportação (em uma linha só)
+            // Formata as informações de lote para exportação
             const loteExport = formatarLoteParaExportacao(prod.loteInfo);
             
             produtosSheetData.push([
                 prod.codigo,
                 prod.descricao,
-                loteExport, // Usa a formatação para exportação
+                loteExport,
                 prod.ean,
                 prod.ncm,
                 formatNumber(prod.quantidade),
@@ -622,25 +422,24 @@ function exportToExcel() {
         
         // Planilha detalhada de lotes (OPCIONAL)
         const lotesSheetData = [
-            ["DETALHES DE LOTE, VALIDADE E FABRICAÇÃO", "", "", "", ""],
+            ["DETALHES DE LOTE E VALIDADE", "", "", "", ""],
             ["", "", "", "", ""],
-            ["Item", "Descrição", "Lote", "Validade", "Fabricação", "Fonte"]
+            ["Item", "Descrição", "Lote", "Validade", "Texto Original"]
         ];
         
         produtosExibidos.forEach((prod, index) => {
             lotesSheetData.push([
                 index + 1,
                 prod.descricao,
-                prod.loteInfo.lote !== "N/A" ? `${prod.loteInfo.lote} (${getFonteLabel(prod.loteInfo.loteSource)})` : "N/A",
-                prod.loteInfo.validade !== "N/A" ? `${prod.loteInfo.validade} (${getFonteLabel(prod.loteInfo.validadeSource)})` : "N/A",
-                prod.loteInfo.fabricacao !== "N/A" ? `${prod.loteInfo.fabricacao} (${getFonteLabel(prod.loteInfo.fabricacaoSource)})` : "N/A",
-                `${getFonteLabel(prod.loteInfo.loteSource)}/${getFonteLabel(prod.loteInfo.validadeSource)}/${getFonteLabel(prod.loteInfo.fabricacaoSource)}`
+                prod.loteInfo.lote !== "N/A" ? prod.loteInfo.lote : "N/A",
+                prod.loteInfo.validade !== "N/A" ? prod.loteInfo.validade : "N/A",
+                prod.loteInfo.textoOriginal || "N/A"
             ]);
         });
         
         const lotesSheet = XLSX.utils.aoa_to_sheet(lotesSheetData);
         const lotesColWidths = [
-            {wch: 8}, {wch: 40}, {wch: 20}, {wch: 15}, {wch: 15}, {wch: 20}
+            {wch: 8}, {wch: 40}, {wch: 30}, {wch: 15}, {wch: 50}
         ];
         lotesSheet['!cols'] = lotesColWidths;
         
@@ -732,17 +531,17 @@ function exportToPDF() {
         doc.text(`Cidade/UF: ${nfeData.destinatario.cidade || 'N/A'}`, margin, yPos);
         yPos += 15;
         
-        // Tabela de produtos (EXATAMENTE COMO NA TABELA)
+        // Tabela de produtos
         doc.setFontSize(12);
         doc.setFont(undefined, 'bold');
         doc.text("PRODUTOS/SERVIÇOS", margin, yPos);
         yPos += 10;
         
         // Para PDF, usamos os dados exibidos na tabela
-        const headers = [["Código", "Descrição", "Lote/Validade/Fabricação", "Qtd", "Valor Total"]];
+        const headers = [["Código", "Descrição", "Lote/Validade", "Qtd", "Valor Total"]];
         const data = produtosExibidos.map(prod => {
-            // Formata as informações de lote para PDF (remove quebras de linha)
-            const lotePDF = prod.loteDisplay.replace(/\n/g, ' | ');
+            // Formata as informações de lote para PDF
+            const lotePDF = formatarLoteParaExportacao(prod.loteInfo);
             
             return [
                 prod.codigo,
