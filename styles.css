@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leitor de NF-e XML - Exportável</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-file-invoice"></i> Leitor de NF-e XML</h1>
+            <p>Importe arquivos XML de Nota Fiscal Eletrônica e exporte para Excel ou PDF</p>
+        </div>
+
+        <div class="upload-section">
+            <h3><i class="fas fa-cloud-upload-alt"></i> Selecione o Arquivo XML</h3>
+            <input type="file" id="xmlFile" accept=".xml,text/xml" />
+            <p style="color: #7f8c8d; font-size: 0.9rem; margin-top: 10px;">
+                Formato aceito: XML de NF-e (Nota Fiscal Eletrônica)
+            </p>
+        </div>
+
+        <div class="export-buttons">
+            <button class="export-btn excel" onclick="exportToExcel()" disabled id="excelBtn">
+                <i class="fas fa-file-excel"></i> Exportar para Excel
+            </button>
+            <button class="export-btn pdf" onclick="exportToPDF()" disabled id="pdfBtn">
+                <i class="fas fa-file-pdf"></i> Exportar para PDF
+            </button>
+        </div>
+
+        <div id="invoiceInfo" style="display: none;">
+            <div class="info-grid">
+                <div class="info-card">
+                    <h3><i class="fas fa-building"></i> Emitente</h3>
+                    <div id="emitente"></div>
+                </div>
+                <div class="info-card">
+                    <h3><i class="fas fa-user-tie"></i> Destinatário</h3>
+                    <div id="destinatario"></div>
+                </div>
+                <div class="info-card">
+                    <h3><i class="fas fa-info-circle"></i> Informações da NF-e</h3>
+                    <div id="nfeInfo"></div>
+                </div>
+                <div class="info-card">
+                    <h3><i class="fas fa-calculator"></i> Totais</h3>
+                    <div id="totais"></div>
+                </div>
+                <div class="info-card inf-adicional">
+                    <h3><i class="fas fa-sticky-note"></i> Informações Adicionais</h3>
+                    <div id="infAdicionais"></div>
+                </div>
+            </div>
+
+            <div class="products-section">
+                <h2><i class="fas fa-boxes"></i> Produtos/Serviços</h2>
+                <div id="productsTable"></div>
+            </div>
+        </div>
+
+        <div id="noData" class="no-data">
+            <i class="fas fa-file-alt fa-3x" style="color: #bdc3c7; margin-bottom: 20px;"></i>
+            <h3>Nenhum XML carregado</h3>
+            <p>Selecione um arquivo XML de NF-e para visualizar as informações</p>
+        </div>
+    </div>
+
+    <!-- Bibliotecas externas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    
+    <!-- Script principal -->
+    <script src="script.js"></script>
+</body>
+</html>
