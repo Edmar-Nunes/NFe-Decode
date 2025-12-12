@@ -3,41 +3,50 @@ let nfeData = null;
 let xmlDoc = null;
 let produtosExibidos = []; // Array para armazenar os produtos exibidos na tabela
 
-// Inicialização
-document.addEventListener('DOMContentLoaded', function() {
-    document.getElementById("xmlFile").addEventListener("change", function(event) {
-        const file = event.target.files[0];
-        if (!file) return;
+// Inicialização quando a página carrega
+window.onload = function() {
+    // Configurar event listeners
+    document.getElementById("xmlFile").addEventListener("change", handleFileSelect);
+    document.getElementById("excelBtn").addEventListener("click", exportToExcel);
+    document.getElementById("pdfBtn").addEventListener("click", exportToPDF);
+    
+    // Inicialmente desabilitar botões de exportação
+    document.getElementById("excelBtn").disabled = true;
+    document.getElementById("pdfBtn").disabled = true;
+};
 
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            try {
-                const parser = new DOMParser();
-                xmlDoc = parser.parseFromString(e.target.result, "text/xml");
-                
-                // Verifica se é um XML válido de NF-e
-                const nfe = xmlDoc.querySelector("NFe, nfeProc");
-                if (!nfe) {
-                    throw new Error("XML não é uma NF-e válida");
-                }
+function handleFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
 
-                parseXML(xmlDoc);
-                
-                // Mostra os dados e habilita botões de exportação
-                document.getElementById("invoiceInfo").style.display = "block";
-                document.getElementById("noData").style.display = "none";
-                document.getElementById("excelBtn").disabled = false;
-                document.getElementById("pdfBtn").disabled = false;
-                
-            } catch (error) {
-                alert("Erro ao processar XML: " + error.message);
-                console.error(error);
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const parser = new DOMParser();
+            xmlDoc = parser.parseFromString(e.target.result, "text/xml");
+            
+            // Verifica se é um XML válido de NF-e
+            const nfe = xmlDoc.querySelector("NFe, nfeProc");
+            if (!nfe) {
+                throw new Error("XML não é uma NF-e válida");
             }
-        };
-        
-        reader.readAsText(file);
-    });
-});
+
+            parseXML(xmlDoc);
+            
+            // Mostra os dados e habilita botões de exportação
+            document.getElementById("invoiceInfo").style.display = "block";
+            document.getElementById("noData").style.display = "none";
+            document.getElementById("excelBtn").disabled = false;
+            document.getElementById("pdfBtn").disabled = false;
+            
+        } catch (error) {
+            alert("Erro ao processar XML: " + error.message);
+            console.error(error);
+        }
+    };
+    
+    reader.readAsText(file);
+}
 
 // ============================================
 // FUNÇÕES PRINCIPAIS
@@ -522,7 +531,10 @@ function getFonteLabel(fonte) {
 // ============================================
 
 function exportToExcel() {
-    if (!nfeData || !produtosExibidos.length) return;
+    if (!nfeData || !produtosExibidos.length) {
+        alert('Nenhum dado disponível para exportação. Carregue um arquivo XML primeiro.');
+        return;
+    }
     
     try {
         // Cria uma nova workbook
@@ -645,7 +657,10 @@ function exportToExcel() {
 }
 
 function exportToPDF() {
-    if (!nfeData || !produtosExibidos.length) return;
+    if (!nfeData || !produtosExibidos.length) {
+        alert('Nenhum dado disponível para exportação. Carregue um arquivo XML primeiro.');
+        return;
+    }
     
     try {
         const { jsPDF } = window.jspdf;
@@ -853,7 +868,7 @@ function formatDate(dateString) {
         const datePart = dateString.split('T')[0];
         const [year, month, day] = datePart.split('-');
         if (year && month && day) {
-            return `${day}/${month}/${year}`;
+            return `${day.padStart(2, '0')}/${month.padStart(2, '0')}/${year}`;
         }
         
         // Tenta formato brasileiro
